@@ -248,7 +248,7 @@ func TestReconcile(t *testing.T) {
 			knCert("knCert", "foo"),
 			cmCertWithStatus("knCert", "foo", correctDNSNames, []cmv1.CertificateCondition{{
 				Type:   cmv1.CertificateConditionReady,
-				Status: cmmeta.ConditionTrue}}, nil),
+				Status: cmmeta.ConditionTrue}}),
 			nonHTTP01Issuer,
 		},
 		WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
@@ -272,7 +272,7 @@ func TestReconcile(t *testing.T) {
 			knCert("knCert", "foo"),
 			cmCertWithStatus("knCert", "foo", correctDNSNames, []cmv1.CertificateCondition{{
 				Type:   cmv1.CertificateConditionReady,
-				Status: cmmeta.ConditionUnknown}}, nil),
+				Status: cmmeta.ConditionUnknown}}),
 			nonHTTP01Issuer,
 		},
 		WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
@@ -296,7 +296,7 @@ func TestReconcile(t *testing.T) {
 			knCert("knCert", "foo"),
 			cmCertWithStatus("knCert", "foo", correctDNSNames, []cmv1.CertificateCondition{{
 				Type:   cmv1.CertificateConditionReady,
-				Status: cmmeta.ConditionFalse}}, nil),
+				Status: cmmeta.ConditionFalse}}),
 			nonHTTP01Issuer,
 		},
 		WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
@@ -315,20 +315,9 @@ func TestReconcile(t *testing.T) {
 		}},
 		Key: "foo/knCert",
 	}, {
-		Name: "set Knative Certificate renewing status with CM Certificate Renewing status",
+		Name: "set Knative Certificate not ready status with CM Certificate Renewing status",
 		Objects: []runtime.Object{
-			knCertWithStatus("knCert", "foo", &v1alpha1.CertificateStatus{
-				Status: duckv1.Status{
-					ObservedGeneration: generation,
-					Conditions: duckv1.Conditions{
-						{
-							Type:     v1alpha1.CertificateConditionReady,
-							Status:   corev1.ConditionTrue,
-							Severity: apis.ConditionSeverityError,
-						},
-					},
-				},
-			}),
+			knCert("knCert", "foo"),
 			cmCertWithStatus("knCert", "foo", correctDNSNames, []cmv1.CertificateCondition{
 				{
 					Type:   cmv1.CertificateConditionReady,
@@ -337,10 +326,8 @@ func TestReconcile(t *testing.T) {
 				{
 					Type:   cmv1.CertificateConditionIssuing,
 					Status: cmmeta.ConditionTrue,
-					Reason: renewingEvent,
+					Reason: "Renewing",
 				},
-			}, &metav1.Time{
-				Time: time.Now(),
 			}),
 			nonHTTP01Issuer,
 		},
@@ -350,65 +337,11 @@ func TestReconcile(t *testing.T) {
 					NotAfter: notAfter,
 					Status: duckv1.Status{
 						ObservedGeneration: generation,
-						Conditions: duckv1.Conditions{
-							{
-								Type:     v1alpha1.CertificateConditionReady,
-								Status:   corev1.ConditionTrue,
-								Severity: apis.ConditionSeverityError,
-							},
-							{
-								Type:     renewingEvent,
-								Status:   corev1.ConditionTrue,
-								Severity: apis.ConditionSeverityError,
-							},
-						},
-					},
-				}),
-		}},
-		Key: "foo/knCert",
-	}, {
-		Name: "set Knative Certificate ready status after a renew with CM Certificate ready status",
-		Objects: []runtime.Object{
-			knCertWithStatus("knCert", "foo", &v1alpha1.CertificateStatus{
-				Status: duckv1.Status{
-					ObservedGeneration: generation,
-					Conditions: duckv1.Conditions{
-						{
+						Conditions: duckv1.Conditions{{
 							Type:     v1alpha1.CertificateConditionReady,
-							Status:   corev1.ConditionTrue,
+							Status:   corev1.ConditionUnknown,
 							Severity: apis.ConditionSeverityError,
-						},
-						{
-							Type:     renewingEvent,
-							Status:   corev1.ConditionTrue,
-							Severity: apis.ConditionSeverityError,
-						},
-					},
-				},
-			}),
-			cmCertWithStatus("knCert", "foo", correctDNSNames, []cmv1.CertificateCondition{
-				{
-					Type:   cmv1.CertificateConditionReady,
-					Status: cmmeta.ConditionTrue,
-				},
-			}, &metav1.Time{
-				Time: time.Now().Add(5 * time.Minute),
-			}),
-			nonHTTP01Issuer,
-		},
-		WantStatusUpdates: []clientgotesting.UpdateActionImpl{{
-			Object: knCertWithStatus("knCert", "foo",
-				&v1alpha1.CertificateStatus{
-					NotAfter: notAfter,
-					Status: duckv1.Status{
-						ObservedGeneration: generation,
-						Conditions: duckv1.Conditions{
-							{
-								Type:     v1alpha1.CertificateConditionReady,
-								Status:   corev1.ConditionTrue,
-								Severity: apis.ConditionSeverityError,
-							},
-						},
+						}},
 					},
 				}),
 		}},
@@ -556,7 +489,7 @@ func TestReconcile_HTTP01Challenges(t *testing.T) {
 			cmCertWithStatus("knCert", "foo", correctDNSNames, []cmv1.CertificateCondition{{
 				Type:   cmv1.CertificateConditionReady,
 				Status: cmmeta.ConditionFalse,
-				Reason: "InProgress"}}, nil),
+				Reason: "InProgress"}}),
 			knCert("knCert", "foo"),
 			http01Issuer,
 		},
@@ -666,11 +599,10 @@ func cmCert(name, namespace string, dnsNames []string) *cmv1.Certificate {
 	return cert
 }
 
-func cmCertWithStatus(name, namespace string, dnsNames []string, conditions []cmv1.CertificateCondition, renewalTime *metav1.Time) *cmv1.Certificate {
+func cmCertWithStatus(name, namespace string, dnsNames []string, conditions []cmv1.CertificateCondition) *cmv1.Certificate {
 	cert := cmCert(name, namespace, dnsNames)
 	cert.Status.Conditions = conditions
 	cert.Status.NotAfter = notAfter
-	cert.Status.RenewalTime = renewalTime
 	return cert
 }
 
